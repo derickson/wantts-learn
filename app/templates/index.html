@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Clone TTS</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; justify-content: center; padding: 2rem; }
+        .container { max-width: 640px; width: 100%; }
+        h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+        .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+        .status-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; padding: 0.75rem 1rem; background: #1e293b; border-radius: 8px; font-size: 0.875rem; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.loaded { background: #22c55e; }
+        .dot.unloaded { background: #ef4444; }
+        .dot.loading { background: #eab308; animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+        textarea { width: 100%; min-height: 100px; padding: 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 1rem; resize: vertical; font-family: inherit; }
+        textarea:focus { outline: none; border-color: #6366f1; }
+        .controls { display: flex; gap: 0.75rem; margin-top: 1rem; }
+        button { padding: 0.625rem 1.25rem; border: none; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: opacity 0.15s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #6366f1; color: white; }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .result { margin-top: 1.5rem; }
+        audio { width: 100%; margin-top: 0.5rem; }
+        .links { margin-top: 2rem; font-size: 0.875rem; color: #94a3b8; }
+        .links a { color: #818cf8; text-decoration: none; }
+        .links a:hover { text-decoration: underline; }
+        .error { color: #f87171; margin-top: 1rem; font-size: 0.875rem; }
+        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 0.5rem; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voice Clone TTS</h1>
+        <p class="subtitle">Text-to-speech with Dave's cloned voice</p>
+
+        <div class="status-bar">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">Checking...</span>
+        </div>
+
+        <textarea id="textInput" placeholder="Enter text to synthesize...">Hello, this is a test of the voice cloning system.</textarea>
+
+        <div class="controls">
+            <button class="btn-primary" id="generateBtn" onclick="generate()">Generate</button>
+            <button class="btn-secondary" id="downloadBtn" style="display:none" onclick="download()">Download WAV</button>
+        </div>
+
+        <div id="error" class="error"></div>
+
+        <div class="result" id="result" style="display:none">
+            <audio id="audioPlayer" controls></audio>
+        </div>
+
+        <div class="links">
+            <a href="/docs">API Documentation (Swagger)</a> &middot; <a href="/redoc">ReDoc</a>
+        </div>
+    </div>
+
+    <script>
+        let lastBlob = null;
+
+        async function checkStatus() {
+            try {
+                const r = await fetch('/api/status');
+                const d = await r.json();
+                const dot = document.getElementById('statusDot');
+                const txt = document.getElementById('statusText');
+                if (d.model_loaded) {
+                    dot.className = 'dot loaded';
+                    txt.textContent = `Model loaded (GPU: ${d.gpu.allocated_gb} GB used)`;
+                } else {
+                    dot.className = 'dot unloaded';
+                    txt.textContent = 'Model not loaded';
+                }
+            } catch {
+                document.getElementById('statusDot').className = 'dot unloaded';
+                document.getElementById('statusText').textContent = 'Service unavailable';
+            }
+        }
+
+        async function generate() {
+            const btn = document.getElementById('generateBtn');
+            const err = document.getElementById('error');
+            const text = document.getElementById('textInput').value.trim();
+            err.textContent = '';
+            if (!text) { err.textContent = 'Please enter some text.'; return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Generating...';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('downloadBtn').style.display = 'none';
+
+            // Show loading status while model might be loading
+            document.getElementById('statusDot').className = 'dot loading';
+            document.getElementById('statusText').textContent = 'Generating...';
+
+            try {
+                const r = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text})
+                });
+                if (!r.ok) {
+                    const d = await r.json().catch(() => ({}));
+                    throw new Error(d.detail || `HTTP ${r.status}`);
+                }
+                lastBlob = await r.blob();
+                const url = URL.createObjectURL(lastBlob);
+                const player = document.getElementById('audioPlayer');
+                player.src = url;
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('downloadBtn').style.display = 'inline-block';
+                player.play();
+            } catch (e) {
+                err.textContent = 'Error: ' + e.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+                checkStatus();
+            }
+        }
+
+        function download() {
+            if (!lastBlob) return;
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(lastBlob);
+            a.download = 'output.wav';
+            a.click();
+        }
+
+        checkStatus();
+        setInterval(checkStatus, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+services:
+  wantts:
+    build: .
+    ports:
+      - "8335:8335"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+      - ./DaveSample.m4a:/app/DaveSample.m4a
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:
