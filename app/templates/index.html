@@ -36,11 +36,19 @@
 <body>
     <div class="container">
         <h1>Voice Clone TTS</h1>
-        <p class="subtitle">Text-to-speech with Dave's cloned voice</p>
+        <p class="subtitle">Text-to-speech with cloned voices</p>
 
         <div class="status-bar">
             <span class="dot" id="statusDot"></span>
             <span id="statusText">Checking...</span>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label for="voiceSelect" style="font-size: 0.875rem; color: #94a3b8; display: block; margin-bottom: 0.375rem;">Voice</label>
+            <select id="voiceSelect" style="padding: 0.5rem 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; cursor: pointer;">
+                <option value="dave" selected>Dave</option>
+                <option value="claire">Claire</option>
+            </select>
         </div>
 
         <textarea id="textInput" placeholder="Enter text to synthesize...">My name is Dave and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service.</textarea>
@@ -103,7 +111,7 @@
                 const r = await fetch('/api/generate', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
+                    body: JSON.stringify({text, voice: document.getElementById('voiceSelect').value})
                 });
                 if (!r.ok) {
                     const d = await r.json().catch(() => ({}));

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ModelManager:
     def __init__(self):
         self.model = None
-        self.voice_prompt = None
+        self.voice_prompts: dict[str, object] = {}
         self.sample_rate: int | None = None
         self._lock = asyncio.Lock()
         self._idle_timer: asyncio.Task | None = None
@@ -31,18 +31,19 @@ class ModelManager:
             dtype=config.DTYPE,
             attn_implementation=config.ATTN_IMPL,
         )
-        logger.info("Creating voice clone prompt ...")
-        self.voice_prompt = self.model.create_voice_clone_prompt(
-            ref_audio=config.REF_AUDIO_PATH,
-            ref_text=config.REF_TEXT,
-        )
-        logger.info("Model and voice prompt ready.")
+        for name, voice_cfg in config.VOICES.items():
+            logger.info("Creating voice clone prompt for '%s' ...", name)
+            self.voice_prompts[name] = self.model.create_voice_clone_prompt(
+                ref_audio=voice_cfg["ref_audio"],
+                ref_text=voice_cfg["ref_text"],
+            )
+        logger.info("Model and %d voice prompt(s) ready.", len(self.voice_prompts))
 
     def _unload_sync(self):
         logger.info("Unloading model ...")
         del self.model
         self.model = None
-        self.voice_prompt = None
+        self.voice_prompts.clear()
         self.sample_rate = None
         torch.cuda.empty_cache()
         logger.info("Model unloaded, GPU memory freed.")
@@ -87,22 +88,22 @@ class ModelManager:
     async def get_ready(self):
         await self.ensure_loaded()
 
-    def _generate_sync(self, text: str, language: str) -> tuple[bytes, int]:
+    def _generate_sync(self, text: str, language: str, voice: str) -> tuple[bytes, int]:
         wavs, sr = self.model.generate_voice_clone(
             text=[text],
             language=[language],
-            voice_clone_prompt=self.voice_prompt,
+            voice_clone_prompt=self.voice_prompts[voice],
         )
         buf = io.BytesIO()
         sf.write(buf, wavs[0], sr, format="WAV")
         buf.seek(0)
         return buf.read(), sr
 
-    async def generate(self, text: str, language: str = "English") -> tuple[bytes, int]:
+    async def generate(self, text: str, language: str = "English", voice: str = config.DEFAULT_VOICE) -> tuple[bytes, int]:
         async with self._lock:
             if self.model is None:
                 raise RuntimeError("Model is not loaded")
-            wav_bytes, sr = await asyncio.to_thread(self._generate_sync, text, language)
+            wav_bytes, sr = await asyncio.to_thread(self._generate_sync, text, language, voice)
             self.sample_rate = sr
             self._reset_idle_timer()
             return wav_bytes, sr

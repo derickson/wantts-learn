@@ -2,8 +2,10 @@ import base64
 import io
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
+from . import config
 
 router = APIRouter(prefix="/api")
 
@@ -11,6 +13,7 @@ router = APIRouter(prefix="/api")
 class GenerateRequest(BaseModel):
     text: str
     language: str = Field(default="English")
+    voice: str = Field(default=config.DEFAULT_VOICE, description="Voice character to use (e.g. 'dave', 'claire')")
 
 
 class GenerateJsonResponse(BaseModel):
@@ -23,9 +26,14 @@ class GenerateJsonResponse(BaseModel):
 @router.post("/generate", summary="Generate speech audio", response_class=StreamingResponse)
 async def generate(req: GenerateRequest, request: Request):
     """Generate speech from text and return a WAV file."""
+    if req.voice not in config.VOICES:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"Unknown voice '{req.voice}'. Available voices: {list(config.VOICES.keys())}"},
+        )
     mm = request.app.state.model_manager
     await mm.ensure_loaded()
-    wav_bytes, sr = await mm.generate(req.text, req.language)
+    wav_bytes, sr = await mm.generate(req.text, req.language, req.voice)
     return StreamingResponse(
         io.BytesIO(wav_bytes),
         media_type="audio/wav",
@@ -36,9 +44,14 @@ async def generate(req: GenerateRequest, request: Request):
 @router.post("/generate/json", summary="Generate speech (base64 JSON)", response_model=GenerateJsonResponse)
 async def generate_json(req: GenerateRequest, request: Request):
     """Generate speech from text and return base64-encoded audio with metadata."""
+    if req.voice not in config.VOICES:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"Unknown voice '{req.voice}'. Available voices: {list(config.VOICES.keys())}"},
+        )
     mm = request.app.state.model_manager
     await mm.ensure_loaded()
-    wav_bytes, sr = await mm.generate(req.text, req.language)
+    wav_bytes, sr = await mm.generate(req.text, req.language, req.voice)
     return GenerateJsonResponse(
         audio_base64=base64.b64encode(wav_bytes).decode(),
         sample_rate=sr,

@@ -4,10 +4,11 @@ A FastAPI service for text-to-speech using [Qwen3-TTS-12Hz-1.7B-Base](https://hu
 
 ## Features
 
-- **Voice cloning** from a reference audio sample
+- **Multiple voice characters** — ships with Dave and Claire, selectable via API parameter
+- **Voice cloning** from reference audio samples
 - **Automatic model lifecycle** — loads on demand, unloads after 15 minutes idle to free GPU memory
 - **REST API** with Swagger UI (`/docs`) and ReDoc (`/redoc`)
-- **Web UI** — landing page with text input, audio playback, and download
+- **Web UI** — landing page with voice selector, text input, audio playback, and download
 
 ## Requirements
 
@@ -25,15 +26,20 @@ The first build takes 10-15 minutes (flash-attn compilation). On first run the H
 - **Web UI**: http://localhost:8335
 - **Swagger docs**: http://localhost:8335/docs
 
-To swap the reference voice, replace `DaveSample.m4a` in the project root — the compose file bind-mounts it into the container.
-
 ### Verify it's working
 
 ```bash
 curl http://localhost:8335/api/status
+
+# Generate with default voice (Dave)
 curl -X POST http://localhost:8335/api/generate \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello world"}' -o test.wav
+
+# Generate with Claire's voice
+curl -X POST http://localhost:8335/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello world", "voice": "claire"}' -o claire.wav
 ```
 
 ## Local Development (without Docker)
@@ -71,16 +77,22 @@ uvicorn app.main:app --host 0.0.0.0 --port 8335
 ```bash
 curl -X POST http://localhost:8335/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello world", "language": "English"}' \
+  -d '{"text": "Hello world", "language": "English", "voice": "dave"}' \
   -o output.wav
 ```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | *(required)* | Text to synthesize |
+| `language` | string | `"English"` | Language of the text |
+| `voice` | string | `"dave"` | Voice character (`dave`, `claire`) |
 
 ### Generate speech (JSON response)
 
 ```bash
 curl -X POST http://localhost:8335/api/generate/json \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello world"}'
+  -d '{"text": "Hello world", "voice": "claire"}'
 ```
 
 Returns:
@@ -99,12 +111,29 @@ Returns:
 curl http://localhost:8335/api/status
 ```
 
+## Adding New Voices
+
+1. Place a reference audio file (`.mp3`, `.m4a`, `.wav`) in the project root.
+2. Add an entry to the `VOICES` dict in `app/config.py`:
+   ```python
+   "newname": {
+       "ref_audio": "./newname.wav",
+       "ref_text": "Exact transcript of the reference audio...",
+   },
+   ```
+3. Mount the file in `docker-compose.yml`:
+   ```yaml
+   volumes:
+     - ./newname.wav:/app/newname.wav
+   ```
+4. Restart the service. The new voice is available via `"voice": "newname"` in API requests.
+
 ## Project Structure
 
 ```
 app/
 ├── __init__.py
-├── config.py             # Model name, reference audio/text, timeouts, device
+├── config.py             # Model name, voice definitions, timeouts, device
 ├── model_manager.py      # Async model lifecycle: load, unload, idle timer
 ├── routes.py             # API endpoint handlers
 ├── main.py               # FastAPI app, lifespan, landing page
@@ -112,7 +141,8 @@ app/
     └── index.html        # Web UI
 Dockerfile
 docker-compose.yml
-DaveSample.m4a            # Reference voice sample
+DaveSample.m4a            # Dave's reference voice sample
+claire.mp3                # Claire's reference voice sample
 ```
 
 ## Configuration
@@ -122,8 +152,8 @@ Edit `app/config.py` to change:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `MODEL_NAME` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | HuggingFace model ID |
-| `REF_AUDIO_PATH` | `./DaveSample.m4a` | Reference voice audio file |
-| `REF_TEXT` | *(transcript)* | Transcript of the reference audio |
+| `VOICES` | `{"dave": ..., "claire": ...}` | Voice character definitions (ref audio + transcript) |
+| `DEFAULT_VOICE` | `"dave"` | Default voice when none specified |
 | `IDLE_TIMEOUT_SECONDS` | `900` | Seconds before auto-unloading (15 min) |
 | `DEVICE` | `cuda:0` | Torch device |
 | `DTYPE` | `torch.bfloat16` | Model precision |
