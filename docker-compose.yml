@@ -1,11 +1,11 @@
 services:
-  wantts:
+  qwen3tts:
     build: .
     restart: unless-stopped
     ports:
       - "8335:8335"
     volumes:
-      - hf-cache:/root/.cache/huggingface
+      - qwen3tts-learn_hf-cache:/root/.cache/huggingface
       - ./DaveSample.m4a:/app/DaveSample.m4a
     deploy:
       resources:
@@ -16,4 +16,5 @@ services:
               capabilities: [gpu]
 
 volumes:
-  hf-cache:
+  qwen3tts-learn_hf-cache:
+    external: true
