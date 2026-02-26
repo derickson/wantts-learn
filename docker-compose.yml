@@ -1,6 +1,7 @@
 services:
   wantts:
     build: .
+    restart: unless-stopped
     ports:
       - "8335:8335"
     volumes:
