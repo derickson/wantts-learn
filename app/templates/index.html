@@ -31,9 +31,16 @@
         .error { color: #f87171; margin-top: 1rem; font-size: 0.875rem; }
         .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 0.5rem; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .gpu-badge { position: fixed; top: 1rem; right: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.5; z-index: 100; }
+        .gpu-badge .label { color: #64748b; }
+        .gpu-badge .value { color: #e2e8f0; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
+    <div class="gpu-badge" id="gpuBadge">
+        <div><span class="label">VRAM </span><span class="value" id="gpuVram">--</span></div>
+        <div><span class="label">GPU  </span><span class="value" id="gpuUtil">--</span></div>
+    </div>
     <div class="container">
         <h1>Voice Clone TTS</h1>
         <p class="subtitle">Text-to-speech with cloned voices</p>
@@ -71,6 +78,16 @@
 
     <script>
         let lastBlob = null;
+
+        const defaultTexts = {
+            dave: "My name is Dave and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service.",
+            claire: "My name is Claire and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service."
+        };
+
+        document.getElementById('voiceSelect').addEventListener('change', function() {
+            const text = defaultTexts[this.value];
+            if (text) document.getElementById('textInput').value = text;
+        });
 
         async function checkStatus() {
             try {
@@ -143,6 +160,20 @@
 
         checkStatus();
         setInterval(checkStatus, 30000);
+
+        // GPU stats WebSocket
+        function connectGpuWs() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${proto}//${location.host}/api/ws/gpu`);
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                document.getElementById('gpuVram').textContent = `${d.vram_used_pct}% (${d.vram_used_gb}/${d.vram_total_gb} GB)`;
+                document.getElementById('gpuUtil').textContent = `${d.gpu_util_pct}%`;
+            };
+            ws.onclose = () => setTimeout(connectGpuWs, 1000);
+            ws.onerror = () => ws.close();
+        }
+        connectGpuWs();
     </script>
 </body>
 </html>

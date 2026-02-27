@@ -4,6 +4,13 @@ import logging
 
 import soundfile as sf
 import torch
+from pynvml import (
+    nvmlInit,
+    nvmlDeviceGetHandleByIndex,
+    nvmlDeviceGetMemoryInfo,
+    nvmlDeviceGetUtilizationRates,
+    nvmlShutdown,
+)
 from qwen_tts import Qwen3TTSModel
 
 from . import config
@@ -18,6 +25,7 @@ class ModelManager:
         self.sample_rate: int | None = None
         self._lock = asyncio.Lock()
         self._idle_timer: asyncio.Task | None = None
+        self.is_generating = False
 
     @property
     def is_loaded(self) -> bool:
@@ -103,7 +111,11 @@ class ModelManager:
         async with self._lock:
             if self.model is None:
                 raise RuntimeError("Model is not loaded")
-            wav_bytes, sr = await asyncio.to_thread(self._generate_sync, text, language, voice)
+            self.is_generating = True
+            try:
+                wav_bytes, sr = await asyncio.to_thread(self._generate_sync, text, language, voice)
+            finally:
+                self.is_generating = False
             self.sample_rate = sr
             self._reset_idle_timer()
             return wav_bytes, sr
@@ -119,3 +131,29 @@ class ModelManager:
             "reserved_gb": round(reserved, 2),
             "total_gb": round(total, 2),
         }
+
+    def gpu_stats(self) -> dict:
+        try:
+            nvmlInit()
+            handle = nvmlDeviceGetHandleByIndex(0)
+            mem = nvmlDeviceGetMemoryInfo(handle)
+            util = nvmlDeviceGetUtilizationRates(handle)
+            nvmlShutdown()
+            vram_used_gb = round(mem.used / 1e9, 1)
+            vram_total_gb = round(mem.total / 1e9, 1)
+            vram_used_pct = round(mem.used / mem.total * 100)
+            return {
+                "vram_used_pct": vram_used_pct,
+                "gpu_util_pct": util.gpu,
+                "vram_used_gb": vram_used_gb,
+                "vram_total_gb": vram_total_gb,
+                "is_generating": self.is_generating,
+            }
+        except Exception:
+            return {
+                "vram_used_pct": 0,
+                "gpu_util_pct": 0,
+                "vram_used_gb": 0,
+                "vram_total_gb": 0,
+                "is_generating": self.is_generating,
+            }

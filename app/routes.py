@@ -1,7 +1,8 @@
+import asyncio
 import base64
 import io
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -83,3 +84,19 @@ async def unload(request: Request):
     mm = request.app.state.model_manager
     await mm.unload()
     return {"status": "unloaded", "model_loaded": mm.is_loaded}
+
+
+@router.websocket("/ws/gpu")
+async def gpu_websocket(websocket: WebSocket):
+    await websocket.accept()
+    mm = websocket.app.state.model_manager
+    try:
+        while True:
+            stats = mm.gpu_stats()
+            await websocket.send_json(stats)
+            interval = 1 if stats["is_generating"] else 15
+            await asyncio.sleep(interval)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass

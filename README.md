@@ -42,6 +42,21 @@ curl -X POST http://localhost:8335/api/generate \
   -d '{"text": "Hello world", "voice": "claire"}' -o claire.wav
 ```
 
+## Make Commands
+
+A `Makefile` is provided for common operations:
+
+| Command | Description |
+|---------|-------------|
+| `make start` | Start the service in the background |
+| `make stop` | Stop the service |
+| `make restart` | Restart without rebuilding |
+| `make redeploy` | Stop, rebuild, and start (full redeploy) |
+| `make build` | Build the Docker image without starting |
+| `make status` | Show container state and model/GPU status |
+| `make logs` | Tail container logs |
+| `make shell` | Open a bash shell in the running container |
+
 ## Local Development (without Docker)
 
 Requires Python 3.12+ and CUDA-compatible PyTorch.
