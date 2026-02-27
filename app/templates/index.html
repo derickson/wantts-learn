@@ -7,7 +7,11 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; justify-content: center; padding: 2rem; }
-        .container { max-width: 640px; width: 100%; }
+        .page-layout { display: flex; gap: 2rem; max-width: 1100px; width: 100%; align-items: flex-start; }
+        .main-panel { flex: 1; min-width: 0; }
+        .avatar-panel { width: 340px; flex-shrink: 0; }
+        .avatar-panel video { width: 100%; border-radius: 12px; border: 1px solid #334155; background: #1e293b; }
+        .avatar-label { font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.5rem; }
         h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
         .subtitle { color: #94a3b8; margin-bottom: 2rem; }
         .status-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; padding: 0.75rem 1rem; background: #1e293b; border-radius: 8px; font-size: 0.875rem; }
@@ -34,6 +38,10 @@
         .gpu-badge { position: fixed; top: 1rem; right: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.5; z-index: 100; }
         .gpu-badge .label { color: #64748b; }
         .gpu-badge .value { color: #e2e8f0; font-variant-numeric: tabular-nums; }
+        @media (max-width: 800px) {
+            .page-layout { flex-direction: column; }
+            .avatar-panel { width: 100%; }
+        }
     </style>
 </head>
 <body>
@@ -41,52 +49,73 @@
         <div><span class="label">VRAM </span><span class="value" id="gpuVram">--</span></div>
         <div><span class="label">GPU  </span><span class="value" id="gpuUtil">--</span></div>
     </div>
-    <div class="container">
-        <h1>Voice Clone TTS</h1>
-        <p class="subtitle">Text-to-speech with cloned voices</p>
+    <div class="page-layout">
+        <div class="main-panel">
+            <h1>Voice Clone TTS</h1>
+            <p class="subtitle">Text-to-speech with cloned voices</p>
 
-        <div class="status-bar">
-            <span class="dot" id="statusDot"></span>
-            <span id="statusText">Checking...</span>
+            <div class="status-bar">
+                <span class="dot" id="statusDot"></span>
+                <span id="statusText">Checking...</span>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label for="voiceSelect" style="font-size: 0.875rem; color: #94a3b8; display: block; margin-bottom: 0.375rem;">Voice</label>
+                <select id="voiceSelect" style="padding: 0.5rem 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; cursor: pointer;"></select>
+            </div>
+
+            <textarea id="textInput" placeholder="Enter text to synthesize..."></textarea>
+
+            <div class="controls">
+                <button class="btn-primary" id="generateBtn" onclick="generate()">Generate</button>
+                <button class="btn-secondary" id="downloadBtn" style="display:none" onclick="download()">Download WAV</button>
+            </div>
+
+            <div id="error" class="error"></div>
+
+            <div class="result" id="result" style="display:none">
+                <audio id="audioPlayer" controls></audio>
+            </div>
+
+            <div class="links">
+                <a href="/docs">API Documentation (Swagger)</a> &middot; <a href="/redoc">ReDoc</a>
+            </div>
         </div>
 
-        <div style="margin-bottom: 1rem;">
-            <label for="voiceSelect" style="font-size: 0.875rem; color: #94a3b8; display: block; margin-bottom: 0.375rem;">Voice</label>
-            <select id="voiceSelect" style="padding: 0.5rem 0.75rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; cursor: pointer;">
-                <option value="dave" selected>Dave</option>
-                <option value="claire">Claire</option>
-            </select>
-        </div>
-
-        <textarea id="textInput" placeholder="Enter text to synthesize...">My name is Dave and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service.</textarea>
-
-        <div class="controls">
-            <button class="btn-primary" id="generateBtn" onclick="generate()">Generate</button>
-            <button class="btn-secondary" id="downloadBtn" style="display:none" onclick="download()">Download WAV</button>
-        </div>
-
-        <div id="error" class="error"></div>
-
-        <div class="result" id="result" style="display:none">
-            <audio id="audioPlayer" controls></audio>
-        </div>
-
-        <div class="links">
-            <a href="/docs">API Documentation (Swagger)</a> &middot; <a href="/redoc">ReDoc</a>
+        <div class="avatar-panel">
+            <p class="avatar-label">Avatar</p>
+            <video id="avatarVideo" autoplay loop muted playsinline controls></video>
         </div>
     </div>
 
     <script>
         let lastBlob = null;
 
-        const defaultTexts = {
-            dave: "My name is Dave and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service.",
-            claire: "My name is Claire and I am a cloned voice.  A small sample of my voice was used to create a copy using a text to speech model.  Check out the documentation for how to call this service."
-        };
+        const voiceConfig = __VOICE_CONFIG__;
+        const defaultVoice = __DEFAULT_VOICE__;
 
-        document.getElementById('voiceSelect').addEventListener('change', function() {
-            const text = defaultTexts[this.value];
-            if (text) document.getElementById('textInput').value = text;
+        // Populate voice dropdown from config
+        const voiceSelect = document.getElementById('voiceSelect');
+        Object.keys(voiceConfig).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            if (name === defaultVoice) opt.selected = true;
+            voiceSelect.appendChild(opt);
+        });
+
+        // Set initial text and avatar from config
+        document.getElementById('textInput').value = voiceConfig[defaultVoice].default_text;
+        document.getElementById('avatarVideo').src = voiceConfig[defaultVoice].avatar_video;
+
+        voiceSelect.addEventListener('change', function() {
+            const cfg = voiceConfig[this.value];
+            if (cfg) {
+                document.getElementById('textInput').value = cfg.default_text;
+                const el = document.getElementById('avatarVideo');
+                el.src = cfg.avatar_video;
+                el.load();
+            }
         });
 
         async function checkStatus() {

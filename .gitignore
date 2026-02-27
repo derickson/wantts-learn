@@ -3,3 +3,4 @@ audio_outputs
 __pycache__
 *.mp3
 *.m4a
+/*.mp4

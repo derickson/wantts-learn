@@ -10,12 +10,26 @@ VOICES = {
             "create a digital twin of myself. I am expressive and I speak in an uh eloquent "
             "and uh maybe a little bit  informal tone. Thanks"
         ),
+        "avatar_video": "dave_avatar.mp4",
+        "default_text": (
+            "Hey everyone! My name is Dave and I am a cloned voice ... ... I used a small "
+            "sample of my voice to generate what I'm saying right now using an air-gapped Text "
+            "To Speech model.  Check out the documentation for how to call this service. "
+            "... ... Thanks!"
+        ),
     },
     "claire": {
         "ref_audio": "./claire.mp3",
         "ref_text": (
             "Wow, I am really embarrassed! I've never been to such a wild party and I think, "
             "... well, maybe I could get used to this kind of luxury treatment."
+        ),
+        "avatar_video": "claire_avatar.mp4",
+        "default_text": (
+            "Hey everyone! My name is Claire and I am a cloned voice ... ... I used a small "
+            "sample of my voice to generate what I'm saying right now using an air-gapped Text "
+            "To Speech model.  Check out the documentation for how to call this service. "
+            "... ... Thanks!"
         ),
     },
 }
